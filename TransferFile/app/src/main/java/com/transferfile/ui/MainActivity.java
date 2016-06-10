@@ -8,6 +8,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.net.wifi.p2p.WifiP2pDevice;
+import android.net.wifi.p2p.WifiP2pManager;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.NavigationView;
@@ -35,6 +37,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.transferfile.R;
+import com.transferfile.Wifi.WiFiAdmin;
+import com.transferfile.Wifi.WiFiDirectBroadcastReceiver;
 import com.transferfile.adapter.TabAdapter;
 import com.transferfile.fabtoolbarlib.widget.FABToolbarLayout;
 import com.transferfile.tablayout.SlidingTabLayout;
@@ -42,56 +46,95 @@ import com.transferfile.tablayout.listener.OnTabSelectListener;
 import com.transferfile.utils.ViewFindUtils;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity
-        implements NavigationView.OnNavigationItemSelectedListener,OnTabSelectListener,View.OnClickListener {
+        implements NavigationView.OnNavigationItemSelectedListener, OnTabSelectListener, View.OnClickListener {
     private Context mContext = this;
     private IntentFilter filter;
     private Receiver receiver;
 
-    /**浮动按钮**/
+    //增加wifi相关
+    BroadcastReceiver wifiReceiver;
+    WiFiAdmin wiFiAdmin;
+    List<WifiP2pDevice> devices = null;
+
+    /**
+     * 浮动按钮
+     **/
     private FABToolbarLayout fabToolbarLayout;
     private FloatingActionButton fab;
-    private View createiv, scaniv,createtv,scantv,cancel_popupwindow,sendtv_popupwindow;
+    private View createiv, scaniv, createtv, scantv, cancel_popupwindow, sendtv_popupwindow;
     private TextView sendnumtv_popupwindow;
-    private boolean selectfolderflag=false;//标记选中文件
+    private boolean selectfolderflag = false;//标记选中文件
 
     private ArrayList<Fragment> mFragments = new ArrayList<>();
     private final String[] mTitles = {
-            "历史", "图片","音频"
+            "历史", "图片", "音频"
             , "视频", "文档", "应用"
     };
     private TabAdapter mTabAdapter;
     private ViewPager vp;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initUI();//初始化侧栏
         initTab();//初始化Tab
-        filter=new IntentFilter();
+        filter = new IntentFilter();
         filter.addAction("ChildAdapter_CheckBoxClick");//有被选中的图片隐藏fab,弹出poupwindow
         filter.addAction("ChildAdapter_CheckBoxUnClick");//没有选中的图片弹出fab,隐藏popupwindow
         filter.addAction("ShowImageFragmentDestroyView");//该fragment销毁
         filter.addAction("ChildAdapter_CheckBoxChange");//选中文件个数发生变化
         filter.addAction("ViewPageChange");//ViewPage发生变化
-        receiver=new Receiver();
+
+        //初始化监听器
+        receiver = new Receiver();
+
+        //wifi管理部分初始化
+        wiFiAdmin = new WiFiAdmin((WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE), this);
+        wifiReceiver = wiFiAdmin.getWiFiBroadcastReceiver();
+        filter.addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION);
+        filter.addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION);
+        filter.addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION);
+        filter.addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION);
+
+        //扫描wifi
+        scaniv.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                wiFiAdmin.scanWifiDevice();
+            }
+        });
+
+        //连接wifi，采用wiFiAdmin的getDeviceList函数可获取搜索到的设备列表，没有搜索到则返回null
+        createiv.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Log.e("create","click");
+                devices = wiFiAdmin.getDeviceList();
+                if (devices != null){
+                    //默认链接第一个
+                    wiFiAdmin.connectDevice(devices.get(0));
+                }
+            }
+        });
     }
 
     /*初始化侧栏、toolbar、fab*/
-    public void initUI()
-    {
+    public void initUI() {
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
         fabToolbarLayout = (FABToolbarLayout) findViewById(R.id.fabtoolbar);
         createiv = findViewById(R.id.createiv);//创建直连按钮
         scaniv = findViewById(R.id.scaniv);//扫描直连按钮
-        createtv=findViewById(R.id.createtv);
-        scantv=findViewById(R.id.scantv);
-        cancel_popupwindow=findViewById(R.id.cancel_popupwindow);//取消选项
-        sendtv_popupwindow=findViewById(R.id.sendtv_popupwindow);//发送文件
-        sendnumtv_popupwindow=(TextView)findViewById(R.id.sendnumtv_popupwindow);//选中数目
+        createtv = findViewById(R.id.createtv);
+        scantv = findViewById(R.id.scantv);
+        cancel_popupwindow = findViewById(R.id.cancel_popupwindow);//取消选项
+        sendtv_popupwindow = findViewById(R.id.sendtv_popupwindow);//发送文件
+        sendnumtv_popupwindow = (TextView) findViewById(R.id.sendnumtv_popupwindow);//选中数目
         createiv.setOnClickListener(this);
         scaniv.setOnClickListener(this);
         cancel_popupwindow.setOnClickListener(this);
@@ -118,26 +161,25 @@ public class MainActivity extends AppCompatActivity
     }
 
     /*初始化Tab页面*/
-    public void initTab()
-    {
+    public void initTab() {
         for (String title : mTitles) {
-            if(title.equals("历史"))
-            mFragments.add(HistoryFragment.getInstance(title));
-            if(title.equals("图片"))
+            if (title.equals("历史"))
+                mFragments.add(HistoryFragment.getInstance(title));
+            if (title.equals("图片"))
                 mFragments.add(RootPhotoFragment.getInstance(title));
-            if(title.equals("音频"))
+            if (title.equals("音频"))
                 mFragments.add(MusicFragment.getInstance(title));
-            if(title.equals("视频"))
+            if (title.equals("视频"))
                 mFragments.add(VideoFragment.getInstance(title));
-            if(title.equals("文档"))
+            if (title.equals("文档"))
                 mFragments.add(ApplicationFragment.getInstance(title));
-            if(title.equals("应用"))
+            if (title.equals("应用"))
                 mFragments.add(ApplicationFragment.getInstance(title));
         }
 
         View decorView = getWindow().getDecorView();
         vp = ViewFindUtils.find(decorView, R.id.viewpager);
-        mTabAdapter = new TabAdapter(getSupportFragmentManager(),mFragments,mTitles);
+        mTabAdapter = new TabAdapter(getSupportFragmentManager(), mFragments, mTitles);
         vp.setAdapter(mTabAdapter);
         SlidingTabLayout tabLayout = ViewFindUtils.find(decorView, R.id.tablayout);
         tabLayout.setMainContext(mContext);//将主界面context出入Tab类中可在页面切换时发广播
@@ -145,10 +187,11 @@ public class MainActivity extends AppCompatActivity
         vp.setCurrentItem(1);
     }
 
-    /**判断fabtoolbar布局**/
-    public void changefablayout()
-    {
-        if(selectfolderflag==true)//选中文件
+    /**
+     * 判断fabtoolbar布局
+     **/
+    public void changefablayout() {
+        if (selectfolderflag == true)//选中文件
         {
             createiv.setVisibility(View.INVISIBLE);
             scaniv.setVisibility(View.INVISIBLE);
@@ -157,9 +200,7 @@ public class MainActivity extends AppCompatActivity
             cancel_popupwindow.setVisibility(View.VISIBLE);
             sendtv_popupwindow.setVisibility(View.VISIBLE);
             sendnumtv_popupwindow.setVisibility(View.VISIBLE);
-        }
-        else
-        {
+        } else {
             createiv.setVisibility(View.VISIBLE);
             scaniv.setVisibility(View.VISIBLE);
             createtv.setVisibility(View.VISIBLE);
@@ -171,17 +212,17 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    public void onResume()
-    {
+    public void onResume() {
         super.onResume();
         registerReceiver(receiver, filter);
+        registerReceiver(wifiReceiver, filter);
     }
 
     @Override
-    public void onPause()
-    {
+    public void onPause() {
         super.onPause();
         unregisterReceiver(receiver);
+        unregisterReceiver(wifiReceiver);
     }
 
     @Override
@@ -189,8 +230,7 @@ public class MainActivity extends AppCompatActivity
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
         if (drawer.isDrawerOpen(GravityCompat.START)) {
             drawer.closeDrawer(GravityCompat.START);
-        }
-        else if(fabToolbarLayout.isOpen()==true)
+        } else if (fabToolbarLayout.isOpen() == true)
             fabToolbarLayout.hide();
         else {
             super.onBackPressed();
@@ -257,12 +297,11 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onClick(View v) {
-        switch(v.getId())
-        {
+        switch (v.getId()) {
             case R.id.cancel_popupwindow:
-                 int currentitem=vp.getCurrentItem();
-                Toast.makeText(this, "当前view"+currentitem, Toast.LENGTH_SHORT).show();
-                if(currentitem==1)
+                int currentitem = vp.getCurrentItem();
+                Toast.makeText(this, "当前view" + currentitem, Toast.LENGTH_SHORT).show();
+                if (currentitem == 1)
                     ShowImageFragment.getSif().clearSelectData();
                 break;
             default:
@@ -272,42 +311,40 @@ public class MainActivity extends AppCompatActivity
 
     }
 
-    public class Receiver extends BroadcastReceiver{
+    public class Receiver extends BroadcastReceiver {
         @Override
-        public void onReceive(final Context context,Intent intent)
-        {
-            if(intent.getAction().equals("ChildAdapter_CheckBoxClick"))//文件被选中
+        public void onReceive(final Context context, Intent intent) {
+            if (intent.getAction().equals("ChildAdapter_CheckBoxClick"))//文件被选中
             {
-                selectfolderflag=true;
+                selectfolderflag = true;
                 changefablayout();
-                if(fabToolbarLayout.isOpen()==false)
+                if (fabToolbarLayout.isOpen() == false)
                     fabToolbarLayout.show();
             }
-            if(intent.getAction().equals("ChildAdapter_CheckBoxUnClick"))//选中0个文件
-           {
-               selectfolderflag=false;
-              if(fabToolbarLayout.isOpen()==true)
-                  fabToolbarLayout.hide();
-           }
-            if(intent.getAction().equals("ShowImageFragmentDestroyView"))//该ShowImagefragment被销毁
+            if (intent.getAction().equals("ChildAdapter_CheckBoxUnClick"))//选中0个文件
             {
-                selectfolderflag=false;
-                if(fabToolbarLayout.isOpen()==true)
+                selectfolderflag = false;
+                if (fabToolbarLayout.isOpen() == true)
                     fabToolbarLayout.hide();
             }
-            if(intent.getAction().equals("ChildAdapter_CheckBoxChange"))//选中文件个数发生变化
+            if (intent.getAction().equals("ShowImageFragmentDestroyView"))//该ShowImagefragment被销毁
             {
-                int seleectnum=Integer.parseInt(intent.getExtras().get("selectimagenum").toString());
+                selectfolderflag = false;
+                if (fabToolbarLayout.isOpen() == true)
+                    fabToolbarLayout.hide();
+            }
+            if (intent.getAction().equals("ChildAdapter_CheckBoxChange"))//选中文件个数发生变化
+            {
+                int seleectnum = Integer.parseInt(intent.getExtras().get("selectimagenum").toString());
                 sendnumtv_popupwindow.setText(String.valueOf(seleectnum));
             }
-            if(intent.getAction().equals("ViewPageChange"))//ViewPage发生变化
+            if (intent.getAction().equals("ViewPageChange"))//ViewPage发生变化
             {
-                selectfolderflag=false;
-                if(fabToolbarLayout.isOpen()==true)
-                {
+                selectfolderflag = false;
+                if (fabToolbarLayout.isOpen() == true) {
                     fabToolbarLayout.hide();
                 }
-                if(vp.getCurrentItem()==1&&ShowImageFragment.getSif()!=null)
+                if (vp.getCurrentItem() == 1 && ShowImageFragment.getSif() != null)
                     ShowImageFragment.getSif().clearSelectData();
             }
         }
