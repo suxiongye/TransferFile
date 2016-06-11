@@ -114,9 +114,12 @@ public class MainActivity extends AppCompatActivity
             public void onClick(View v) {
                 Log.e("create","click");
                 devices = wiFiAdmin.getDeviceList();
-                if (devices != null){
+                if (devices != null && devices.size() > 0){
                     //默认链接第一个
                     wiFiAdmin.connectDevice(devices.get(0));
+                }
+                else {
+                    Toast.makeText(MainActivity.this, "未查找到设备，请稍等",Toast.LENGTH_SHORT).show();
                 }
             }
         });

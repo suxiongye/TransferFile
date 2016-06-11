@@ -1,11 +1,14 @@
 package com.transferfile.Wifi;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.net.NetworkInfo;
 import android.net.wifi.WifiManager;
 import android.net.wifi.p2p.WifiP2pConfig;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pManager;
+import android.os.Environment;
 import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
@@ -13,6 +16,7 @@ import android.widget.Toast;
 import com.transferfile.ui.MainActivity;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
@@ -33,6 +37,7 @@ public class WiFiAdmin {
     private WifiP2pManager manager;
     private WifiP2pManager.Channel channel;
     private WiFiDirectBroadcastReceiver receiver;
+    private static FileServer fileServer;
     private MainActivity activity;
 
     public WiFiAdmin(WifiP2pManager manager, MainActivity activity) {
@@ -120,9 +125,16 @@ public class WiFiAdmin {
             }
         });
         if (isConnected) {
-            Toast.makeText(this.activity, "已连接上", Toast.LENGTH_LONG).show();
+            //开启后台文件接收
+            if (fileServer == null){
+                fileServer = new FileServer();
+                fileServer.execute();
+            }
+
+            Toast.makeText(this.activity, "已连接上", Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this.activity, "正在连接....", Toast.LENGTH_LONG).show();
+            fileServer = null;
+            Toast.makeText(this.activity, "正在连接....", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -159,4 +171,18 @@ public class WiFiAdmin {
         }
         return null;
     }
+
+    /**
+     * 根据路径发送文件
+     */
+    public void sendFileByPath(String filePath, String fileName) {
+        SendThread sendThread = new SendThread(getP2pDeviceIP(), filePath, fileName);
+        sendThread.run();
+    }
+
+    public void createFile() {
+        File file = new File(Environment.getExternalStorageDirectory() + "/WifiBase/123.txt");
+
+    }
+
 }
