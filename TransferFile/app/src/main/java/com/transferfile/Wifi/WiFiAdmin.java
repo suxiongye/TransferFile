@@ -180,6 +180,14 @@ public class WiFiAdmin {
         sendThread.run();
     }
 
+    /**
+     * 查看设备是否在已链接状态
+     * @return
+     */
+    public boolean checkIfConnect(){
+        return this.isConnected;
+    }
+
     public void createFile() {
         File file = new File(Environment.getExternalStorageDirectory() + "/WifiBase/123.txt");
 
